@@ -1,0 +1,10 @@
+{
+  "species": "goats",
+  "images_found": 1009,
+  "raw_class_counts": {
+    "UNRESOLVED": 1009
+  },
+  "unreadable": 0,
+  "exact_duplicate_groups": 0,
+  "unresolved_labels": 1009
+}

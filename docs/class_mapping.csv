@@ -1,0 +1,6 @@
+﻿species,source_class_label,proposed_project_class,status,evidence_needed
+goat,goatpox,goat__goat_pox,PROPOSED,Verify original label schema and sample image labels
+goat,healthy_skin,goat__healthy,PROPOSED,Verify no diseased image assigned healthy
+cattle,Lumpy skin,cattle__lumpy_skin_disease,PROPOSED,Verify samples and case/format spelling
+cattle,Clean,cattle__healthy,PROPOSED,Verify clean means clinically healthy in source
+chicken,TBD,TBD,HOLD,Extract source labels and counts; decide chicken vs sheep

@@ -14,10 +14,9 @@ PentAI is a Data Science capstone project that explores
 the use of computer vision and deep learning for
 image-based livestock disease classification.
 
-The project focuses on three livestock species:
+The project focuses on two livestock species:
 - Goats
 - Cattle
-- Chickens
 
 The proposed system will classify supported disease
 categories from uploaded livestock images.
@@ -65,9 +64,9 @@ separately as they become available.
 
 | Species | Dataset | Google Drive |
 |---|---|---|
-| Goat | Goat Pox Detection | [Goat Dataset](PASTE_GOAT_FOLDER_URL) |
-| Cattle | Healthy and Lumpy Skin Disease | [Cattle Dataset](PASTE_CATTLE_FOLDER_URL) |
-| Chicken | Chicken Disease Images | [Chicken Dataset](PASTE_CHICKEN_FOLDER_URL) |
+| Goat | Goat Pox Detection | [Goat Dataset](https://drive.google.com/file/d/1Dpw1SHO_P0QVEiOo_VnCMDRE10Sae8Ed/view?usp=sharing) |
+| Cattle | Healthy and Lumpy Skin Disease | [Cattle Dataset](https://drive.google.com/file/d/1COCT4TeyrFEKH6oooxD62CzGXFHs67Ku/view?usp=sharing) |
+
 
 ### Known Dataset Information
 
@@ -78,9 +77,14 @@ separately as they become available.
 - Processed image size: 256 × 256 pixels
 - Processed format: PNG
 
-**Goat and Chicken**
-- Detailed counts and classes: to be verified
-  in the dataset inventory.
+**Goat**
+- The dataset includes 1009 images.
+  Goatpox are annotated in Tensorflow Object Detection format.
+
+The following pre-processing was applied to each image:
+
+No image augmentation techniques were applied.
+.
 
 The original dataset sources, licenses, class
 distributions, and preprocessing details are recorded

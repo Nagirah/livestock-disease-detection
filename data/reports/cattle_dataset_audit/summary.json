@@ -1,0 +1,11 @@
+{
+  "species": "cattle",
+  "images_found": 1024,
+  "raw_class_counts": {
+    "Lumpy Skin": 324,
+    "Normal Skin": 700
+  },
+  "unreadable": 0,
+  "exact_duplicate_groups": 5,
+  "unresolved_labels": 0
+}

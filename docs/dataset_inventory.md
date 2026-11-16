@@ -1,154 +1,69 @@
-# Capstone
- https://drive.google.com/drive/folders/1BYzqsYn1JDBOm_b33nyU3Ryullv-p8XI?usp=drive_link
+# PentAI — Dataset Inventory
 
-# Dataset/Chicken
-https://drive.google.com/file/d/1tb_HGvGJqAEttBV6c8yLFxRwMmWP7g7f/view?usp=drive_link
+**Scope:** Goatpox versus healthy; cattle Lumpy Skin Disease versus healthy. Chicken dataset excluded by current scope.  
+**Evidence date:** original notebook saved inspection outputs, reviewed 2 November 2026.  
+**Counting convention:** image *files* and unique annotated *images* are distinct from annotation *rows*.
 
-# Dataset/Cow
-https://drive.google.com/file/d/1COCT4TeyrFEKH6oooxD62CzGXFHs67Ku/view?usp=drive_link
+## 1. Source-image inventory
 
-# Dataset/Goat
-https://drive.google.com/file/d/1Dpw1SHO_P0QVEiOo_VnCMDRE10Sae8Ed/view?usp=drive_link
+| Item | Cattle | Goats |
+|---|---:|---:|
+| Actual image files | **1,024** | **1,009** |
+| Unique images with annotation entries | Source uses class folders; no annotation CSV count recorded | **1,006** |
+| Files without an annotation record | Not applicable to folder-derived labels | **3** |
+| Exact-byte duplicate occurrences found | **5** | **0** |
+| Corrupted files reported by initial verification | **0** | **0** |
+| Original image format | **1,024 PNG** | **1,009 JPEG** |
+| RGB images | **1,011** | **1,009** |
+| RGBA images | **13** | **0** |
+| Width × height | **256 × 256** for all | Varies (see below) |
 
+`Image.verify()` reported zero corrupt files in the original notebook. A full decode pass and independent rereun are still recommended; do not interpret this as proof of perfect semantic image quality.
 
-# PentAI — Livestock Dataset Inventory
+## 2. Goat partitions and classes — observed counts
 
-**Project:** Multi-Livestock Disease Detection System  
-**Repository:** livestock-disease-detection  
-**Maintained by:** PentAI Team  
-**Last Updated:** 21 October 2026
+| Split | Actual files | Annotated unique images | Unannotated files | Healthy annotated | Goatpox annotated |
+|---|---:|---:|---:|---:|---:|
+| Train | **707** | **705** | **2** | **423** | **282** |
+| Validation | **202** | **202** | **0** | **122** | **80** |
+| Test | **100** | **99** | **1** | **63** | **36** |
+| **Total** | **1,009** | **1,006** | **3** | **608** | **398** |
 
-## 1. Dataset Overview
+Goat annotated-image distribution: `healthy` **608 / 1,006 = 60.44%**; `goatpox` **398 / 1,006 = 39.56%**. Training annotations originally contained **834 rows** for **705 unique training images**; **442 `healthy_skin` rows** and **392 `goatpox` rows**. Those are annotation rows, not 834 distinct images.
 
-| Species | Dataset | Images | Status |
-|---|---|---:|---|
-| Goat | Goat Pox Detection | TBD | Initial dataset available |
-| Cattle | Lumpy Skin Disease / Healthy | 1024 | Processed |
-| Chicken | Chicken Disease Dataset | TBD | Requires quality review |
+After excluding two *annotated* goat images with filename/annotation disagreements and three unannotated files, the expected eligible inventory is **1,004**. If both ambiguous images carry the notebook's provisional `goatpox` annotation, the calculated eligible class totals are `healthy` **608** and `goatpox` **396**. Confirm these against the regenerated CSV before reporting them as final.
 
-Note: Counts refer to the current known dataset versions.
-Update them after verification.
+## 3. Cattle classes and expected cleaned counts
 
-## 2. Goat Dataset
+The cattle directory contains the source classes `Lumpy Skin` and `Normal Skin`. The dataset description previously supplied reports **324 Lumpy Skin** and **700 Normal Skin** files (sum **1,024**). The original notebook's saved outputs independently confirm **1,024 total** but do **not** include a dedicated printed cattle per-class count; treat the 324/700 breakdown as **source-reported pending verification** with `cow_metadata` or the current manifest.
 
-**Dataset Name:** Goat Pox Detection  
-**Original Filename:** Goat Pox Detection.v1i.tensorflow.zip  
-**Original Source:** [Add original source URL]  
-**Version:** v1  
-**License:** [Verify license]  
-**Drive Folder:** [Add goat folder URL]
+| Class | Source-reported count | Provisional exclusions based on identified pairs | Expected included, if source counts match |
+|---|---:|---:|---:|
+| Lumpy Skin | 324 | 5 (2 same-class extras + 3 conflicting) | **319** |
+| Normal Skin | 700 | 3 (conflicting) | **697** |
+| **Total** | **1,024** | **8** | **1,016** |
 
-### Dataset Composition
+Exact cattle duplicate pairs: `317↔318` and `269↔285` in Lumpy Skin; `86↔Normal_Skin_242`, `154↔Normal_Skin_429`, and `229↔Normal_Skin_588` cross class. See `docs/cleaning_decisions.md` for actions.
 
-| Class | Image Count |
-|---|---:|
-| [Actual class label] | TBD |
-| [Actual class label] | TBD |
-| Total | TBD |
+## 4. Image properties observed in notebook
 
-### Technical Details
-- Image format: To verify
-- Image resolution: To verify
-- Dataset split: To verify
-- Preprocessing: To document
-- Duplicates: Not yet assessed
-- Quality issues: To verify
+**Cattle:** Every image was 256 × 256 px, PNG. Of 1,024 images, 1,011 were RGB and 13 were RGBA. Convert to RGB consistently before model ingestion.
 
-## 3. Cattle Dataset
+**Goat:** Every image was JPEG and RGB. Observed width range: **194–2,048 px**, median **698 px**, mean **734.71 px**. Observed height range: **159–2,048 px**, median **674 px**, mean **642.50 px**. These varying sizes require a consistent resize/shape policy later.
 
-**Dataset Name:** Cattle Disease Dataset  
-**Original Filename:** Cow data.zip  
-**Original Source:** [Add original source URL]  
-**License:** [Verify license]  
-**Drive Folder:** [Add cattle folder URL]
+## 5. Provisional cleaning summary
 
-### Dataset Composition
+| Animal | Original | Expected excluded | Expected eligible | Status |
+|---|---:|---:|---:|---|
+| Cattle | 1,024 | 8 | **1,016** | Provisional, requires latest Colab confirmation |
+| Goats | 1,009 | 5 | **1,004** | Provisional, requires latest Colab confirmation |
+| **Total** | **2,033** | **13** | **2,020** | Not yet a signed-off prepared dataset |
 
-| Class | Image Count |
-|---|---:|
-| Lumpy Skin Disease | 324 |
-| Healthy | 700 |
-| Total | 1024 |
+The original source archives must remain unchanged. Eligible images are selected via portable `relative_path` and `include` fields in the manifest CSVs. Goat split assignments must remain unchanged. The cattle dataset has **no verified source train/valid/test split**; splitting comes after leakage checks in Notebook 02.
 
-### Technical Details
-- Processed resolution: 256 x 256 pixels
-- Processed format: PNG
-- Preprocessing completed: Image resizing
-- Duplicate screening: To verify
-- Dataset split: To verify
-- Class imbalance: Present (324 versus 700)
+## 6. Provenance and verification needed
 
-### Preparation Notes
-The current processed dataset contains 1,024 images.
-The preprocessing script or notebook must be linked
-when available to document the transformation process.
-
-## 4. Chicken Dataset
-
-**Dataset Name:** Chicken Disease Dataset  
-**Original Filename:** Chicken data.zip  
-**Original Source:** [Add original source URL]  
-**License:** [Verify license]  
-**Drive Folder:** [Add chicken folder URL]
-
-### Dataset Composition
-
-| Class | Image Count |
-|---|---:|
-| [Actual class label] | TBD |
-| [Actual class label] | TBD |
-| Total | TBD |
-
-### Technical Details
-- Image format: To verify
-- Resolution: To verify
-- Dataset split: To verify
-- Preprocessing: To document
-- Quality issues: Requires further review
-- Preliminary usability assessment: 5.5/10
-
-## 5. Data Storage
-
-Original ZIP archives are stored in Google Drive.
-
-- Main Drive Folder: [Add link]
-- Goat Dataset: [Add link]
-- Cattle Dataset: [Add link]
-- Chicken Dataset: [Add link]
-
-Processed datasets will be stored separately
-with appropriate version names.
-
-## 6. Data Cleaning and Preprocessing
-
-For each species, record:
-1. Original number of images.
-2. Removed corrupted or unreadable files.
-3. Removed duplicate images, if any.
-4. Image resizing and format conversion.
-5. Final number of images by class.
-6. Training, validation, and test split method.
-7. Script or notebook used.
-8. Date and responsible contributor.
-
-Do not overwrite original data.
-
-## 7. Dataset Risks and Limitations
-
-- Cattle classes are imbalanced.
-- Chicken dataset quality needs further review.
-- Goat image counts and classes require verification.
-- Dataset licensing must be confirmed.
-- Data leakage must be prevented during splitting.
-- Dataset suitability must be evaluated before training.
-
-## 8. Pending Verification
-
-- [ ] Confirm original source URL for each dataset.
-- [ ] Confirm the license for each dataset.
-- [ ] Verify goat class names and counts.
-- [ ] Verify chicken class names and counts.
-- [ ] Verify cattle preprocessing code.
-- [ ] Record image quality findings.
-- [ ] Document train/validation/test splits.
-- [ ] Verify team access to Google Drive.
+- **Goat source:** Roboflow-exported Goat Pox Detection (TensorFlow-format archive), with `_annotations.csv` per split. Exact version URL, license and acquisition date should be copied from the original export metadata; not verified by the saved notebook outputs.
+- **Cattle source:** Provided `Cow data.zip`, with `Lumpy Skin` and `Normal Skin` class folders; image content already 256×256 PNG. Original hosting URL, license and acquisition date were not evidenced in the notebook outputs.
+- **Storage:** Keep original ZIPs in approved shared Google Drive storage; do not commit images or ZIP archives into standard Git.
+- **Fresh validation:** Run Notebook 01 in Colab, compare actual printed counts and exported class totals, and update this inventory if results differ. Run Notebook 02 to check related-image leakage and create split manifests.
