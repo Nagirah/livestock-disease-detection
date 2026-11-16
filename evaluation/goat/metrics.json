@@ -1,0 +1,14 @@
+{
+  "animal": "goat",
+  "selected_variant": "transfer",
+  "classes": [
+    "goatpox",
+    "healthy"
+  ],
+  "test_samples": 151,
+  "accuracy": 0.9801324503311258,
+  "balanced_accuracy": 0.975,
+  "macro_f1": 0.9790713790713791,
+  "weighted_f1": 0.9800388263964424,
+  "note": "Single held-out evaluation; not a clinical or veterinary diagnostic validation"
+}

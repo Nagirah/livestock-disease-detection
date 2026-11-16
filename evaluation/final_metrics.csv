@@ -1,0 +1,3 @@
+animal,selected_variant,classes,test_samples,accuracy,balanced_accuracy,macro_f1,weighted_f1,note
+cattle,transfer,"['healthy', 'lumpy_skin']",152,0.8552631578947368,0.7932692307692308,0.8163041089870358,0.8474713481131966,Single held-out evaluation; not a clinical or veterinary diagnostic validation
+goat,transfer,"['goatpox', 'healthy']",151,0.9801324503311258,0.975,0.9790713790713791,0.9800388263964424,Single held-out evaluation; not a clinical or veterinary diagnostic validation

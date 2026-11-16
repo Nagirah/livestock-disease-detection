@@ -1,0 +1,19 @@
+{
+  "animal": "cattle",
+  "model_type": "transfer",
+  "architecture": "MobileNetV2",
+  "classes": [
+    "healthy",
+    "lumpy_skin"
+  ],
+  "image_size": [
+    224,
+    224
+  ],
+  "preprocessing": "mobilenet_v2.preprocess_input inside model",
+  "validation_loss": 0.2744669020175934,
+  "validation_accuracy": 0.9006622433662415,
+  "split_source": "Notebook 02 approved CSVs",
+  "test_used": false,
+  "model_file": "best.keras"
+}
