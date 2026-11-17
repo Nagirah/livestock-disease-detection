@@ -3,9 +3,9 @@ channels:
   - conda-forge
   - nodefaults
 dependencies:
-  - python=3.14.*
+  - python=3.13.*
   - pip
-  - numpy          # let the solver pick a 3.14-compatible version
+  - numpy          # let the solver pick a 3.13-compatible version
   - pandas
   - jupyterlab
   - ipykernel      # needed so VS Code notebooks can use this env
