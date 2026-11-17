@@ -76,7 +76,7 @@ footer {visibility:hidden;}
 [data-testid="stImage"] img { max-height: 235px; object-fit: contain; border-radius: 12px; }
 .thumb-caption { color:#c8dfd6; font-size:.77rem; line-height:1.3; overflow-wrap:anywhere; }
 .summary-tag { color:#72e7c2; font-size:.9rem; font-weight:700; }
-@media(max-width:700px){.block-container{padding:1rem .8rem 2rem;} [data-testid="stMetric"]{padding:.55rem .75rem;} }
+@media(max-width:700px){.block-container,[data-testid="stMainBlockContainer"]{padding:5rem .8rem 2rem!important;max-width:100%!important;}h1,h2,h3,.hero h1{white-space:normal!important;overflow-wrap:anywhere;line-height:1.3!important;}.hero h1{font-size:1.65rem!important;}[data-testid="stImage"] img{max-width:100%!important;height:auto!important;}[data-testid="stMetric"]{padding:.55rem .75rem;}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -116,13 +116,15 @@ def open_image(data):
         return ImageOps.exif_transpose(im).convert("RGB")
 
 def get_api_key():
-    key = os.getenv("OPENAI_API_KEY", "")
-    if key:
-        return key
     try:
-        return st.secrets.get("OPENAI_API_KEY", "")
+        key = st.secrets.get("OPENAI_API_KEY", "")
+        if key and key.strip():
+            return key.strip()
     except (FileNotFoundError, KeyError, OSError):
-        return ""
+        pass
+
+    return os.getenv("OPENAI_API_KEY", "").strip()
+    
 
 def result_context(rows):
     valid = [r for r in rows if r.get("status") == "ok"]
