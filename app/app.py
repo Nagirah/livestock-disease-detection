@@ -10,7 +10,8 @@ import streamlit as st
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from inference import load_config, prepare_image, read_probabilities, model_path_for
-from guidance import basic_guidance, create_ai_response
+from guidance import basic_guidance
+from google import genai
 
 ROOT = Path(__file__).resolve().parents[1]
 EVALUATION_DIR = ROOT / "evaluation"
@@ -117,14 +118,46 @@ def open_image(data):
 
 def get_api_key():
     try:
-        key = st.secrets.get("OPENAI_API_KEY", "")
+        key = st.secrets.get("GEMINI_API_KEY", "")
         if key and key.strip():
             return key.strip()
     except (FileNotFoundError, KeyError, OSError):
         pass
 
-    return os.getenv("OPENAI_API_KEY", "").strip()
+    return os.getenv("GEMINI_API_KEY", "").strip()
     
+
+def create_gemini_response(api_key, question, prediction_context, history):
+    """Generate educational animal-health guidance without sending photos or filenames."""
+    client = genai.Client(api_key=api_key)
+    recent_history = "\n".join(
+        f"{msg['role']}: {msg['content'][:1500]}"
+        for msg in history[-6:]
+        if msg.get('role') in ('user', 'assistant')
+    )
+    prompt = (
+        "You are PentAI's educational livestock-health assistant, focused on goats "
+        "and cattle. Give practical, concise, careful general guidance. "
+        "The image classifier only distinguishes goatpox/healthy for goats and "
+        "lumpy skin disease/healthy for cattle, and is not clinically validated. "
+        "Treat predictions as unverified screening results, not diagnoses. "
+        "Explain observation, safe separation, biosecurity, and when to contact "
+        "a qualified veterinarian. Do not prescribe drugs, doses, or treatment "
+        "plans; advise urgent veterinary care for severe or rapidly worsening signs. "
+        "Do not claim to have examined any images. If the question is unrelated to "
+        "animal health, politely steer back to livestock guidance.\n\n"
+        f"Prediction summary: {prediction_context}\n"
+        f"Recent conversation:\n{recent_history}\n"
+        f"Current question: {question[:3000]}"
+    )
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+    )
+    if not response.text:
+        raise ValueError("Gemini returned no text")
+    return response.text
+
 
 def result_context(rows):
     valid = [r for r in rows if r.get("status") == "ok"]
@@ -281,9 +314,9 @@ if page == "Guidance assistant":
     st.write("Ask about model results, observation, safe isolation practices, or how to prepare for a veterinary visit. This is general educational support, not a diagnosis or prescription.")
     key = get_api_key()
     if key:
-        st.success("AI assistant enabled (OpenAI API key configured).")
+        st.success("AI assistant enabled (Google Gemini API key configured).")
     else:
-        st.info("AI chat is not connected yet. Basic offline guidance is available. Configure OPENAI_API_KEY in Streamlit secrets to enable AI responses.")
+        st.info("AI chat is not connected yet. Basic offline guidance is available. Configure GEMINI_API_KEY in Streamlit secrets to enable AI responses.")
     if st.session_state.results:
         st.caption("Current prediction summary: " + result_context(st.session_state.results))
     for message in st.session_state.messages:
@@ -296,7 +329,7 @@ if page == "Guidance assistant":
             st.write(question)
         if key:
             try:
-                answer = create_ai_response(key, question, result_context(st.session_state.results), st.session_state.messages[-7:-1])
+                answer = create_gemini_response(key, question, result_context(st.session_state.results), st.session_state.messages[-7:-1])
             except Exception as exc:
                 answer = ("The AI service is unavailable right now. " + basic_guidance(question) + "\n\n" + f"Technical detail: {type(exc).__name__}")
         else:
@@ -304,7 +337,7 @@ if page == "Guidance assistant":
         st.session_state.messages.append({"role": "assistant", "content": answer})
         with st.chat_message("assistant"):
             st.markdown(answer)
-    st.caption("Only your chat text and an aggregate of prediction labels are sent to the optional AI provider. Uploaded photos and filenames are not sent. Avoid entering private identifying details.")
+    st.caption("Only your chat text and an aggregate of prediction labels are sent to Google Gemini when AI is enabled. Uploaded photos and filenames are not sent. Avoid entering private identifying details.")
 
 if page == "Model insights":
     st.markdown('<div class="section-label">Model evaluation</div>', unsafe_allow_html=True)
