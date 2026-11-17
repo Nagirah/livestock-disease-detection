@@ -230,3 +230,50 @@ data/processed/*
 *.h5
 *.keras
 *.pt
+
+# Python environments and local Python files
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Notebook checkpoints and local editor settings
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# Secrets -- never commit actual credentials
+.streamlit/secrets.toml
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local datasets and training artifacts (metadata/CSV reports are allowed)
+data/raw/
+data/processed/
+datasets/
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# OS and temporary files
+.DS_Store
+Thumbs.db
+*.log
+tmp/
+temp/
+
+# IMPORTANT: Do not ignore *.keras: the two selected models may be
+# committed when within GitHub's limits. Use proper artifact hosting if not.

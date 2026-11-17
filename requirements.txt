@@ -1,3 +1,6 @@
+# Runtime dependencies for app/app.py, app/inference.py and app/guidance.py
+# These version ranges follow the latest PentAI client dashboard package.
+# For reproducible cloud deployment, pin exact locally tested versions.
 streamlit>=1.45,<2
 tensorflow>=2.16,<2.21
 numpy>=1.26,<3
