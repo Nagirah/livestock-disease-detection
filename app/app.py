@@ -4,6 +4,7 @@ from io import BytesIO
 import hashlib
 import json
 import os
+import time
 
 import pandas as pd
 import streamlit as st
@@ -12,12 +13,16 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from inference import load_config, prepare_image, read_probabilities, model_path_for
 from guidance import basic_guidance
 from google import genai
+from google.genai import errors as gemini_errors
 
 ROOT = Path(__file__).resolve().parents[1]
 EVALUATION_DIR = ROOT / "evaluation"
 DISPLAY_LABELS = {"goatpox": "Goatpox", "healthy": "Healthy (model class)", "lumpy_skin": "Lumpy skin disease"}
 MAX_BATCH_FILES = 20
 MAX_BYTES_PER_FILE = 12 * 1024 * 1024
+# Can be overridden using GEMINI_MODEL in Streamlit secrets/environment.
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+GEMINI_RETRY_DELAYS = (1, 2, 4)  # seconds between attempts on temporary server overload
 
 st.set_page_config(page_title="PentAI | Livestock Intelligence", page_icon="🐄", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""
@@ -150,13 +155,28 @@ def create_gemini_response(api_key, question, prediction_context, history):
         f"Recent conversation:\n{recent_history}\n"
         f"Current question: {question[:3000]}"
     )
-    response = client.models.generate_content(
-        model="gemini-3.5-flash-lite",
-        contents=prompt,
-    )
-    if not response.text:
-        raise ValueError("Gemini returned no text")
-    return response.text
+    try:
+        model_name = st.secrets.get("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+    except (FileNotFoundError, KeyError, OSError):
+        model_name = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+    model_name = str(model_name).strip() or DEFAULT_GEMINI_MODEL
+
+    # Retry only a 503 server overload. Authentication, invalid models,
+    # and exhausted quotas should surface immediately to the UI.
+    for attempt in range(len(GEMINI_RETRY_DELAYS) + 1):
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
+            if not response.text:
+                raise ValueError("Gemini returned no text")
+            return response.text
+        except gemini_errors.ServerError as exc:
+            status = getattr(exc, "code", None)
+            if str(status) != "503" or attempt == len(GEMINI_RETRY_DELAYS):
+                raise
+            time.sleep(GEMINI_RETRY_DELAYS[attempt])
 
 
 def result_context(rows):
@@ -331,9 +351,18 @@ if page == "Guidance assistant":
             try:
                 answer = create_gemini_response(key, question, result_context(st.session_state.results), st.session_state.messages[-7:-1])
             except Exception as exc:
-                # Display a brief diagnostic without exposing the configured API key.
-                detail = str(exc).replace(key, "[REDACTED]")[:500]
-                st.error(f"Gemini error: {type(exc).__name__}: {detail}")
+                # Show a helpful status without revealing sensitive API response details.
+                error_code = getattr(exc, "code", None)
+                if str(error_code) == "503":
+                    st.warning("Gemini is busy (503). Automatic retries were unsuccessful; showing offline guidance.")
+                elif str(error_code) == "429":
+                    st.warning("Gemini usage limit reached (429); showing offline guidance.")
+                elif str(error_code) in ("401", "403"):
+                    st.error("Gemini authorization failed. Check the API key and project access.")
+                elif str(error_code) == "404":
+                    st.error("Gemini model unavailable (404). Check GEMINI_MODEL in Streamlit secrets.")
+                else:
+                    st.error(f"Gemini request failed ({type(exc).__name__}); showing offline guidance.")
                 answer = (
                     "The AI service is temporarily unavailable. "
                     + basic_guidance(question)
