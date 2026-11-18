@@ -129,7 +129,7 @@ def get_api_key():
 
 def create_gemini_response(api_key, question, prediction_context, history):
     """Generate educational animal-health guidance without sending photos or filenames."""
-    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+    client = genai.Client(api_key=api_key)
     recent_history = "\n".join(
         f"{msg['role']}: {msg['content'][:1500]}"
         for msg in history[-6:]
@@ -331,16 +331,13 @@ if page == "Guidance assistant":
             try:
                 answer = create_gemini_response(key, question, result_context(st.session_state.results), st.session_state.messages[-7:-1])
             except Exception as exc:
-                except Exception as exc:
-    st.error(
-        f"Gemini error: {type(exc).__name__}: "
-        f"{str(exc)[:500]}"
-    )
-    answer = (
-        "The AI service is temporarily unavailable. "
-        + basic_guidance(question)
-    )
-            
+                # Display a brief diagnostic without exposing the configured API key.
+                detail = str(exc).replace(key, "[REDACTED]")[:500]
+                st.error(f"Gemini error: {type(exc).__name__}: {detail}")
+                answer = (
+                    "The AI service is temporarily unavailable. "
+                    + basic_guidance(question)
+                )
         else:
             answer = "**Basic guidance (not AI):** " + basic_guidance(question)
         st.session_state.messages.append({"role": "assistant", "content": answer})
