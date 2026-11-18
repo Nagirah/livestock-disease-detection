@@ -274,6 +274,7 @@ Thumbs.db
 *.log
 tmp/
 temp/
+*.py.bak
 
 # IMPORTANT: Do not ignore *.keras: the two selected models may be
 # committed when within GitHub's limits. Use proper artifact hosting if not.
