@@ -1,4 +1,4 @@
-"""PentAI livestock-disease app: home, batch predictions, model insights and optional AI guidance."""
+"""PentAI livestock-disease app: screening, FAQs, model insights and optional AI guidance."""
 from pathlib import Path
 from io import BytesIO
 import hashlib
@@ -209,10 +209,11 @@ with st.sidebar:
     st.markdown("**NAVIGATION**")
     page = st.radio(
         "Navigate",
-        ["Home", "Analyze images", "Guidance assistant", "Model insights", "About PentAI"],
+        ["Home", "Analyze images", "Frequently asked questions", "Guidance assistant", "Model insights", "About PentAI"],
         format_func=lambda name: {
             "Home": "⌂  Home",
             "Analyze images": "▣  Analyze images",
+            "Frequently asked questions": "❓  FAQs",
             "Guidance assistant": "◉  Guidance assistant",
             "Model insights": "▥  Model insights",
             "About PentAI": "ⓘ  About PentAI",
@@ -246,9 +247,15 @@ if page == "Home":
     m3.metric("Goat test accuracy", pct(metrics["goat"]["accuracy"]))
     m4.metric("Cattle test accuracy", pct(metrics["cattle"]["accuracy"]))
     st.caption("Model accuracy was measured on held-out evaluation images, not independent veterinary field validation.")
-    if st.button("Start analyzing images →", type="primary"):
-        st.session_state.active_page = "Analyze images"
-        st.rerun()
+    home_analyze, home_faq = st.columns(2)
+    with home_analyze:
+        if st.button("Start analyzing images →", type="primary", use_container_width=True):
+            st.session_state.active_page = "Analyze images"
+            st.rerun()
+    with home_faq:
+        if st.button("Read common questions →", use_container_width=True):
+            st.session_state.active_page = "Frequently asked questions"
+            st.rerun()
 
 if page == "Analyze images":
     st.markdown('<div class="section-label">Analyze livestock images</div>', unsafe_allow_html=True)
@@ -329,14 +336,82 @@ if page == "Analyze images":
                     probability = rows[idx].get(f"prob_{label}", 0.0)
                     st.progress(float(probability), text=f"{DISPLAY_LABELS.get(label,label)} · {probability:.1%}")
 
+if page == "Frequently asked questions":
+    st.markdown('<div class="section-label">Frequently asked questions</div>', unsafe_allow_html=True)
+    st.write("Quick answers to common questions about checking your goats and cattle with PentAI.")
+    faqs = [
+        (
+            "What does PentAI do?",
+            "PentAI checks a photo of a goat or cow for patterns linked to the conditions it was trained to recognize. "
+            "It provides a screening result, not a confirmed veterinary diagnosis.",
+        ),
+        (
+            "Which animals and diseases can I check?",
+            "PentAI currently supports goats (goatpox or healthy model class) and cattle "
+            "(lumpy skin disease or healthy model class). It does not assess chickens, other animals, or every possible illness.",
+        ),
+        (
+            "How do I check an animal?",
+            "Open Analyze images, choose Goat or Cattle, upload a clear JPEG or PNG photo, and select Analyze batch. "
+            "You can upload up to 20 photos at a time.",
+        ),
+        (
+            "What makes a good photo?",
+            "Use a clear, well-lit photo of the animal or affected skin area. Keep the area in focus and avoid heavy shadows "
+            "or filters. Poor-quality images can reduce the usefulness of a screening result.",
+        ),
+        (
+            "What does a 'Healthy' result mean?",
+            "It means the model selected its healthy class from the limited classes it knows. "
+            "It does not prove the animal is healthy or rule out other diseases. Contact a veterinarian if the animal seems unwell.",
+        ),
+        (
+            "What if PentAI identifies a possible disease?",
+            "Treat it as a reason to seek veterinary advice, not a final diagnosis. Record symptoms and when they began, "
+            "limit unnecessary animal movement and contact, and ask a veterinarian about examination and testing.",
+        ),
+        (
+            "Can I use PentAI to choose medicine or treatment?",
+            "No. Do not start medication or make treatment decisions based only on PentAI. "
+            "A qualified veterinarian should decide what tests or treatment may be needed.",
+        ),
+        (
+            "What if my animal is sick but the result says Healthy?",
+            "Do not ignore the symptoms. PentAI recognizes only a few classes and may miss disease. "
+            "Seek a veterinary assessment, especially if the animal has fever, skin lesions, poor appetite, or worsening symptoms.",
+        ),
+        (
+            "Is PentAI free to use?",
+            "The image-screening feature does not require you to buy an AI API key. "
+            "The optional guidance assistant may sometimes be busy or unavailable, but basic guidance remains available.",
+        ),
+        (
+            "Are my uploaded photos sent to the AI assistant?",
+            "No. PentAI processes uploaded photos through its image-classification models. "
+            "If you use the guidance assistant, it sends your chat text and a summary of prediction labels to the AI service, "
+            "not the uploaded photos or filenames.",
+        ),
+    ]
+    for question, answer in faqs:
+        with st.expander(question):
+            st.write(answer)
+    st.divider()
+    st.markdown("### Still have a question?")
+    st.write("Your Livestock Health Assistant is ready to help you understand results, recognize warning signs, "
+             "and prepare questions for a veterinarian.")
+    if st.button("Ask the Livestock Health Assistant →", type="primary", use_container_width=True):
+        st.session_state.active_page = "Guidance assistant"
+        st.rerun()
+    st.caption("Answers are general information and cannot replace a veterinarian's assessment.")
+
 if page == "Guidance assistant":
     st.markdown('<div class="section-label">Guidance assistant</div>', unsafe_allow_html=True)
-    st.write("Ask about model results, observation, safe isolation practices, or how to prepare for a veterinary visit. This is general educational support, not a diagnosis or prescription.")
+    st.write("Ask about screening results, symptoms, animal care, or preparing for a veterinary visit. This information is not a diagnosis or prescription.")
     key = get_api_key()
-    if key:
-        st.success("AI assistant enabled (Google Gemini API key configured).")
-    else:
-        st.info("AI chat is not connected yet. Basic offline guidance is available. Configure GEMINI_API_KEY in Streamlit secrets to enable AI responses.")
+    st.markdown("### Your Livestock Health Assistant Is Ready")
+    st.write("Ask questions about animal health, understand disease symptoms, and learn recommended next steps for your goats and cattle.")
+    if not key:
+        st.caption("Answers are currently based on built-in guidance. Live assistant responses may be unavailable.")
     if st.session_state.results:
         st.caption("Current prediction summary: " + result_context(st.session_state.results))
     for message in st.session_state.messages:
