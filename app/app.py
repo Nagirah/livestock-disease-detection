@@ -1,4 +1,4 @@
-"""PentAI livestock-disease app: screening, FAQs, model insights and optional AI guidance."""
+"""PentAI goat and cattle disease screening, evaluation and Gemini guidance."""
 from pathlib import Path
 from io import BytesIO
 import hashlib
@@ -84,6 +84,40 @@ footer {visibility:hidden;}
 .thumb-caption { color:#c8dfd6; font-size:.77rem; line-height:1.3; overflow-wrap:anywhere; }
 .summary-tag { color:#72e7c2; font-size:.9rem; font-weight:700; }
 @media(max-width:700px){.block-container,[data-testid="stMainBlockContainer"]{padding:5rem .8rem 2rem!important;max-width:100%!important;}h1,h2,h3,.hero h1{white-space:normal!important;overflow-wrap:anywhere;line-height:1.3!important;}.hero h1{font-size:1.65rem!important;}[data-testid="stImage"] img{max-width:100%!important;height:auto!important;}[data-testid="stMetric"]{padding:.55rem .75rem;}}
+
+/* Responsive, readable layout for desktop, tablet and mobile. */
+html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+  overflow-wrap: break-word; word-break: normal;
+}
+[data-testid="stMain"] .block-container { width:100%; min-width:0; }
+[data-testid="stMain"] p, [data-testid="stMain"] li,
+[data-testid="stMain"] label, [data-testid="stMain"] small,
+[data-testid="stSidebar"] label, [data-testid="stSidebar"] p,
+.stCaption, [data-testid="stCaptionContainer"] {
+  white-space: normal !important; overflow-wrap:anywhere !important;
+  word-break:normal !important; line-height:1.5;
+}
+[data-testid="stMetric"] { min-width:0 !important; overflow:visible !important; }
+[data-testid="stMetricValue"] { font-size:clamp(1.55rem, 4vw, 2.3rem) !important;
+  overflow-wrap:anywhere !important; white-space:normal !important; }
+[data-testid="stMetricLabel"] { overflow-wrap:anywhere !important; white-space:normal !important; }
+[data-testid="stHorizontalBlock"] { flex-wrap:wrap !important; }
+[data-testid="stHorizontalBlock"] > [data-testid="stColumn"] { min-width:min(100%, 260px) !important; flex:1 1 260px !important; }
+[data-testid="stImage"] { max-width:100%; }
+[data-testid="stImage"] img { width:auto !important; max-width:100% !important; height:auto !important; max-height:none !important; object-fit:contain; }
+[data-testid="stDataFrame"] { max-width:100%; overflow-x:auto; }
+[data-testid="stButton"] button { min-height:44px; max-width:100%; white-space:normal !important; overflow-wrap:anywhere !important; }
+[data-testid="stSidebar"] [role="radiogroup"] label { max-width:100%; white-space:normal !important; overflow-wrap:anywhere !important; }
+@media(max-width:700px) {
+  .block-container,[data-testid="stMainBlockContainer"] { padding:3.6rem .85rem 2.2rem !important; max-width:100% !important; }
+  .hero { padding:1.15rem 1rem !important; }
+  .hero h1 { font-size:clamp(1.65rem, 7vw, 2.15rem) !important; }
+  .hero p { font-size:.96rem !important; max-width:100% !important; }
+  .section-label { font-size:1.32rem !important; }
+  [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] { flex:1 1 100% !important; min-width:0 !important; }
+  [data-testid="stRadio"] [role="radiogroup"] { flex-wrap:wrap !important; }
+  .panel { padding:1rem !important; }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -202,6 +236,20 @@ if "results" not in st.session_state:
     st.session_state.results = []
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "upload_generation" not in st.session_state:
+    st.session_state.upload_generation = 0
+
+
+def navigate_to(destination):
+    """Change sidebar radio selection before the next Streamlit render."""
+    st.session_state.active_page = destination
+
+
+def clear_image_analysis():
+    """Reset uploaded photos and related results without affecting Gemini chat."""
+    st.session_state.upload_generation += 1
+    st.session_state.results = []
+    st.session_state.pop("results_signature", None)
 
 with st.sidebar:
     st.markdown('<div class="brand-name">◈ PentAI</div><div class="brand-sub">Livestock intelligence</div>', unsafe_allow_html=True)
@@ -210,17 +258,19 @@ with st.sidebar:
     st.markdown("**NAVIGATION**")
     page = st.radio(
         "Navigate",
-        ["Home", "Analyze images", "Frequently asked questions", "Guidance assistant", "Model insights", "About PentAI"],
+        ["Home", "Analyze images", "Frequently asked questions", "Guidance assistant", "Model insights", "Useful links", "About PentAI"],
         format_func=lambda name: {
-            "Home": "⌂  Home",
-            "Analyze images": "▣  Analyze images",
+            "Home": "🏠  Home",
+            "Analyze images": "📷  Analyze images",
             "Frequently asked questions": "❓  FAQs",
-            "Guidance assistant": "◉  Guidance assistant",
-            "Model insights": "▥  Model insights",
-            "About PentAI": "ⓘ  About PentAI",
+            "Guidance assistant": "💬  Guidance assistant",
+            "Model insights": "📊  Model insights",
+            "Useful links": "🔗  Useful links",
+            "About PentAI": "ℹ️  About PentAI",
         }[name],
         key="active_page",
         label_visibility="collapsed",
+        help="Choose a section of PentAI. Your current image results remain available until you clear them or analyze another batch.",
     )
     st.divider()
     st.markdown("**SUPPORTED ANIMALS**")
@@ -245,23 +295,24 @@ if page == "Home":
     m1,m2,m3,m4 = st.columns(4)
     m1.metric("Species", "2")
     m2.metric("Disease targets", "2")
-    m3.metric("Goat test accuracy", pct(metrics["goat"]["accuracy"]))
-    m4.metric("Cattle test accuracy", pct(metrics["cattle"]["accuracy"]))
+    m3.metric("Goat test accuracy", pct(metrics["goat"]["accuracy"]),
+              help="Evaluation accuracy on 151 held-out goat images, not real-world clinical accuracy.")
+    m4.metric("Cattle test accuracy", pct(metrics["cattle"]["accuracy"]),
+              help="Evaluation accuracy on 152 held-out cattle images, not real-world clinical accuracy.")
     st.caption("Model accuracy was measured on held-out evaluation images, not independent veterinary field validation.")
     home_analyze, home_faq = st.columns(2)
     with home_analyze:
-        if st.button("Start analyzing images →", type="primary", use_container_width=True):
-            st.session_state.active_page = "Analyze images"
-            st.rerun()
+        st.button("Start analyzing images →", type="primary", use_container_width=True, on_click=navigate_to, args=("Analyze images",), help="Open image upload and disease screening for goats or cattle.")
     with home_faq:
-        if st.button("Read common questions →", use_container_width=True):
-            st.session_state.active_page = "Frequently asked questions"
-            st.rerun()
+        st.button("Read common questions →", use_container_width=True, on_click=navigate_to, args=("Frequently asked questions",), help="Read answers about supported diseases, image quality, results and next steps.")
 
 if page == "Analyze images":
     st.markdown('<div class="section-label">Analyze livestock images</div>', unsafe_allow_html=True)
     st.caption("Select an animal, upload up to 20 JPEG/PNG images, then click Analyze batch. Photos are processed locally by this app's trained classifiers.")
-    species = st.segmented_control("Animal type", ["Goat", "Cattle"], default=None)
+    species = st.segmented_control(
+        "Animal type", ["Goat", "Cattle"], default=None,
+        help="Required: choose Goat for goatpox screening or Cattle for lumpy skin disease screening. The app cannot confirm the animal species automatically.",
+    )
     if species is None:
         st.info("Choose the animal shown in your photos. PentAI cannot verify species automatically.")
     else:
@@ -270,7 +321,20 @@ if page == "Analyze images":
     with st.expander("Photo tips and supported images"):
         st.write("Use a clear, well-lit photo of the selected goat or cow, preferably showing one animal and any relevant skin area. Avoid heavy filters, extreme close-ups, distant or obstructed views.")
         st.caption("This app cannot automatically verify the animal, detect other diseases, or validate multiple animals in an image. Quality warnings are approximate, not guarantees.")
-    uploads = st.file_uploader("Upload one or more images", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="batch_upload")
+    uploads = st.file_uploader(
+        "Upload one or more images",
+        type=["jpg", "jpeg", "png"],
+        accept_multiple_files=True,
+        key=f"batch_upload_{st.session_state.upload_generation}",
+        help="Select JPEG or PNG photos, up to 20 images per batch and 12 MB per file. Use clear, well-lit photos of the animal selected above.",
+    )
+    st.button(
+        "Clear uploads and results",
+        icon=":material/delete_outline:",
+        on_click=clear_image_analysis,
+        disabled=not (uploads or st.session_state.results),
+        help="Clear this batch: remove uploaded photos, thumbnails, predictions and CSV results. This does not delete saved models or your Gemini conversation.",
+    )
     if len(uploads) > MAX_BATCH_FILES:
         st.warning(f"Select at most {MAX_BATCH_FILES} files per batch. Only the first {MAX_BATCH_FILES} will be processed.")
     selected = uploads[:MAX_BATCH_FILES]
@@ -300,7 +364,21 @@ if page == "Analyze images":
                 else:
                     st.warning("Invalid image")
                 st.caption(f"{idx+1}. {uploaded.name[:34]}")
-    if st.button("✦ Analyze batch", type="primary", disabled=not (bool(selected) and bool(species)), use_container_width=True):
+    # A tooltip alone may not appear on disabled buttons or touch screens.
+    # Keep the reason visible when uploads exist without a selected species.
+    if selected and not species:
+        st.warning("Please select Goat or Cattle above before analyzing these photos.")
+    analyze_disabled = not (bool(selected) and bool(species))
+    if not species:
+        analyze_help = "First select Goat or Cattle, then upload photos to enable analysis."
+    elif not selected:
+        analyze_help = "Upload at least one JPEG or PNG photo to enable analysis."
+    else:
+        analyze_help = "Classify the selected images with the trained model for your chosen animal."
+    if st.button(
+        "✦ Analyze batch", type="primary", disabled=analyze_disabled,
+        use_container_width=True, help=analyze_help,
+    ):
         records = []
         seen_hashes = {}
         progress = st.progress(0, text="Processing images...")
@@ -348,13 +426,20 @@ if page == "Analyze images":
             st.warning(f"{warnings_count} image(s) have quality, duplicate, or interpretation notices. Read the warnings column before relying on results.")
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, column_config={"score": st.column_config.NumberColumn("Model score", format="%.2f")})
         csv_bytes = pd.DataFrame(rows).to_csv(index=False).encode("utf-8-sig")
-        st.download_button("⬇ Download results (CSV)", csv_bytes, file_name="pentai_batch_predictions.csv", mime="text/csv")
+        st.download_button(
+            "⬇ Download results (CSV)", csv_bytes, file_name="pentai_batch_predictions.csv",
+            mime="text/csv",
+            help="Save all batch results, including predictions, model scores, warnings, skipped duplicates and individual errors.",
+        )
         st.caption("Scores are uncalibrated model outputs, not disease probabilities. Image-quality checks are heuristic and cannot prove the right species or detect unknown diseases. Photos remain in session memory; predictions and warnings appear in the CSV.")
         st.warning("Any animal showing illness, unusual skin lesions, fever, or rapid worsening should be assessed by a veterinarian. Do not use model results alone to decide treatment.")
         if successful:
             with st.expander("Inspect individual class scores"):
                 choices = [i for i,r in enumerate(rows) if r["status"] == "ok"]
-                idx = st.selectbox("Image", choices, format_func=lambda i: f"{i+1}. {rows[i]['image']}")
+                idx = st.selectbox(
+                    "Image", choices, format_func=lambda i: f"{i+1}. {rows[i]['image']}",
+                    help="Select a successfully analyzed photo to review scores for all supported classes. Scores are not clinical probabilities.",
+                )
                 for label in label_map[rows[idx]["animal"].lower()]:
                     probability = rows[idx].get(f"prob_{label}", 0.0)
                     st.progress(float(probability), text=f"{DISPLAY_LABELS.get(label,label)} · {probability:.1%}")
@@ -422,9 +507,7 @@ if page == "Frequently asked questions":
     st.markdown("### Still have a question?")
     st.write("Your Livestock Health Assistant is ready to help you understand results, recognize warning signs, "
              "and prepare questions for a veterinarian.")
-    if st.button("Ask the Livestock Health Assistant →", type="primary", use_container_width=True):
-        st.session_state.active_page = "Guidance assistant"
-        st.rerun()
+    st.button("Ask the Livestock Health Assistant →", type="primary", use_container_width=True, on_click=navigate_to, args=("Guidance assistant",), help="Open Gemini-powered guidance. Answers are educational and do not replace a veterinarian.")
     st.caption("Answers are general information and cannot replace a veterinarian's assessment.")
 
 if page == "Guidance assistant":
@@ -435,8 +518,10 @@ if page == "Guidance assistant":
     st.write("Ask questions about animal health, understand disease symptoms, and learn recommended next steps for your goats and cattle.")
     if not key:
         st.caption("Answers are currently based on built-in guidance. Live assistant responses may be unavailable.")
-    if st.session_state.results:
-        st.caption("Current prediction summary: " + result_context(st.session_state.results))
+    successful_context = [r for r in st.session_state.results if r.get("status") == "ok"]
+    if successful_context:
+        with st.expander("Previous image analysis", expanded=False):
+            st.caption(result_context(successful_context))
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -474,17 +559,22 @@ if page == "Guidance assistant":
 
 if page == "Model insights":
     st.markdown('<div class="section-label">Model performance</div>', unsafe_allow_html=True)
-    st.caption("Results are from held-out test images not used in training. They describe model evaluation, not predictions on new uploads or real-world diagnostic accuracy.")
-    insight_view = st.radio("View results", ["Overview", "Goat", "Cattle"], horizontal=True, key="insight_view")
+    st.caption("These results summarize performance on held-out test images, separate from newly uploaded photos. They are not a substitute for veterinary field validation.")
+    insight_view = st.radio(
+        "View results", ["Overview", "Goat", "Cattle"], horizontal=True, key="insight_view",
+        help="Overview compares models; Goat and Cattle show class-level evaluation and confusion matrices from held-out tests.",
+    )
 
     if insight_view == "Overview":
         st.subheader("Evaluation overview")
         a, b = st.columns(2)
         with a:
-            st.metric("Goat test accuracy", pct(metrics["goat"]["accuracy"]))
+            st.metric("Goat test accuracy", pct(metrics["goat"]["accuracy"]),
+                      help="Share of 151 held-out goat test images classified correctly (148/151). Not a field diagnosis rate.")
             st.caption("151 test images · 148 correct")
         with b:
-            st.metric("Cattle test accuracy", pct(metrics["cattle"]["accuracy"]))
+            st.metric("Cattle test accuracy", pct(metrics["cattle"]["accuracy"]),
+                      help="Share of 152 held-out cattle test images classified correctly (130/152). Disease recall is different from accuracy.")
             st.caption("152 test images · 130 correct")
         st.markdown("#### Key findings")
         st.write("The goat model missed 3 of 60 goatpox images. The cattle model missed 18 of 48 lumpy skin disease images.")
@@ -495,9 +585,12 @@ if page == "Model insights":
         data = metrics[animal]
         st.subheader(("🐐 " if animal == "goat" else "🐄 ") + insight_view + " model")
         a, b, c = st.columns(3)
-        a.metric("Accuracy", pct(data["accuracy"]))
-        b.metric("Balanced accuracy", pct(data["balanced_accuracy"]))
-        c.metric("Macro F1", pct(data["macro_f1"]))
+        a.metric("Accuracy", pct(data["accuracy"]),
+                 help="Overall proportion of held-out test images classified correctly.")
+        b.metric("Balanced accuracy", pct(data["balanced_accuracy"]),
+                 help="Average recall across the two classes, giving both classes equal weight.")
+        c.metric("Macro F1", pct(data["macro_f1"]),
+                 help="Average of class-specific F1-scores; balances precision and recall equally across classes.")
         st.caption(f'{data["test_samples"]} held-out test images')
         st.markdown("#### Confusion matrix")
         matrix_path = EVALUATION_DIR / animal / "confusion_matrix.png"
@@ -530,13 +623,41 @@ if page == "Model insights":
             else:
                 st.info("Classification report not available in the evaluation folder.")
         st.caption("These figures are evaluation statistics, not clinical validation or calibrated disease probabilities.")
+
+if page == "Useful links":
+    st.markdown('<div class="section-label">Useful veterinary resources in Kenya</div>', unsafe_allow_html=True)
+    st.write("Access trusted Kenyan veterinary services, professional registers and livestock research information. These resources can support informed follow-up after a PentAI screening result.")
+    st.info("For a sick animal, consult a licensed veterinary professional. PentAI does not diagnose disease or prescribe treatment.")
+    resource_groups = [
+        ("Veterinary professionals and services", [
+            ("🩺 Kenya Veterinary Board", "Find information about registered veterinary practitioners and professional standards in Kenya.", "https://kenyavetboard.or.ke/en"),
+            ("🔎 Kenya Veterinary Board — Registers", "Check official professional registration information before seeking veterinary services.", "https://kenyavetboard.or.ke/en/registers"),
+            ("🏛️ Directorate of Veterinary Services", "Government veterinary services, including information on diagnostic and veterinary public-health services.", "https://dvs.ecitizen.go.ke/"),
+        ]),
+        ("Research and professional information", [
+            ("🌱 Kenya Agricultural and Livestock Research Organization", "Kenyan livestock research, knowledge and agricultural innovations.", "https://kalrodri.org/"),
+            ("👩‍⚕️ Kenya Veterinary Association", "Professional information and veterinary-sector initiatives in Kenya.", "https://www.kenyavetassociation.com/"),
+        ]),
+    ]
+    for group_title, resources in resource_groups:
+        st.subheader(group_title)
+        for name, description, url in resources:
+            with st.container(border=True):
+                st.markdown(f"**{name}**")
+                st.write(description)
+                st.link_button(
+                    "Visit official website ↗", url, use_container_width=False,
+                    help=f"Open the external website for {name}. You will leave the PentAI application.",
+                )
+    st.caption("External websites are operated by their respective organizations. Links were checked during the preparation of this page.")
+
 if page == "About PentAI":
     st.markdown('<div class="section-label">About PentAI</div>', unsafe_allow_html=True)
-    st.write("PentAI is an image-based livestock screening application that analyzes goat and cattle photographs using separate MobileNetV2 models. It helps users review supported disease-class predictions and prepare for veterinary follow-up.")
+    st.write("PentAI is a research-based livestock disease screening application developed to support early identification of visual patterns associated with goatpox in goats and lumpy skin disease in cattle. Using separate MobileNetV2 image-classification models, the platform enables users to analyze photographs, review model-generated screening results and access educational veterinary guidance. Its purpose is to demonstrate practical applications of machine learning in animal-health decision support, while emphasizing responsible interpretation and qualified veterinary follow-up.")
     st.markdown("**Prediction flow:** Choose species → upload image(s) → RGB conversion and resize to 224×224 → saved species-specific model (internal preprocessing) → class scores → result and optional guidance.")
     st.markdown("**Limitations:** Only two classes per species; no automatic species verification, multiple-animal localization, or unknown-disease detection. Quality checks and low-confidence alerts are heuristics only; scores are uncalibrated and dataset performance may not generalize to field conditions.")
     st.markdown("**Veterinary advice:** Seek qualified veterinary assessment for clinical signs, testing and decisions. Do not medicate animals based solely on app predictions.")
-    st.caption("Currently supports goats and cattle only; poultry and other conditions are not supported.")
+    st.caption("PentAI currently focuses on image-based screening for goatpox in goats and lumpy skin disease in cattle.")
 
 st.divider()
 st.caption("© PentAI · Livestock Disease Detection | Predictions support screening only; veterinary confirmation required.")
