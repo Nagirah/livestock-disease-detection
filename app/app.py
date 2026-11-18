@@ -151,7 +151,7 @@ def create_gemini_response(api_key, question, prediction_context, history):
         f"Current question: {question[:3000]}"
     )
     response = client.models.generate_content(
-        model="gemini-2.5-flash-lite",
+        model="gemini-3.5-flash-lite",
         contents=prompt,
     )
     if not response.text:
