@@ -331,8 +331,16 @@ if page == "Guidance assistant":
             try:
                 answer = create_gemini_response(key, question, result_context(st.session_state.results), st.session_state.messages[-7:-1])
             except Exception as exc:
-                st.error(f"Gemini error: {type(exc).__name__}: {str(exc)[:500]}")
-            answer = "The AI service is temporarily unavailable. " + basic_guidance(question)
+                except Exception as exc:
+    st.error(
+        f"Gemini error: {type(exc).__name__}: "
+        f"{str(exc)[:500]}"
+    )
+    answer = (
+        "The AI service is temporarily unavailable. "
+        + basic_guidance(question)
+    )
+            
         else:
             answer = "**Basic guidance (not AI):** " + basic_guidance(question)
         st.session_state.messages.append({"role": "assistant", "content": answer})
