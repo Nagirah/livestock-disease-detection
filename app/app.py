@@ -129,7 +129,7 @@ def get_api_key():
 
 def create_gemini_response(api_key, question, prediction_context, history):
     """Generate educational animal-health guidance without sending photos or filenames."""
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
     recent_history = "\n".join(
         f"{msg['role']}: {msg['content'][:1500]}"
         for msg in history[-6:]
@@ -151,7 +151,7 @@ def create_gemini_response(api_key, question, prediction_context, history):
         f"Current question: {question[:3000]}"
     )
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-2.5-flash-lite",
         contents=prompt,
     )
     if not response.text:
