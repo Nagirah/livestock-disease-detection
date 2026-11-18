@@ -11,6 +11,7 @@ import streamlit as st
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from inference import load_config, prepare_image, read_probabilities, model_path_for
+from edge_cases import assess_image, prediction_warnings  # PENTAI_EDGE_CASES_V1
 from guidance import basic_guidance
 from google import genai
 from google.genai import errors as gemini_errors
@@ -260,8 +261,15 @@ if page == "Home":
 if page == "Analyze images":
     st.markdown('<div class="section-label">Analyze livestock images</div>', unsafe_allow_html=True)
     st.caption("Select an animal, upload up to 20 JPEG/PNG images, then click Analyze batch. Photos are processed locally by this app's trained classifiers.")
-    species = st.segmented_control("Animal type", ["Goat", "Cattle"], default="Goat") or "Goat"
-    animal = species.lower()
+    species = st.segmented_control("Animal type", ["Goat", "Cattle"], default=None)
+    if species is None:
+        st.info("Choose the animal shown in your photos. PentAI cannot verify species automatically.")
+    else:
+        st.caption("Confirm all uploaded photos show the selected species, ideally one animal per image. Other species and unknown diseases are not supported.")
+    animal = (species or "").lower()
+    with st.expander("Photo tips and supported images"):
+        st.write("Use a clear, well-lit photo of the selected goat or cow, preferably showing one animal and any relevant skin area. Avoid heavy filters, extreme close-ups, distant or obstructed views.")
+        st.caption("This app cannot automatically verify the animal, detect other diseases, or validate multiple animals in an image. Quality warnings are approximate, not guarantees.")
     uploads = st.file_uploader("Upload one or more images", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="batch_upload")
     if len(uploads) > MAX_BATCH_FILES:
         st.warning(f"Select at most {MAX_BATCH_FILES} files per batch. Only the first {MAX_BATCH_FILES} will be processed.")
@@ -278,6 +286,9 @@ if page == "Analyze images":
                 if len(data) > MAX_BYTES_PER_FILE:
                     raise ValueError("Image exceeds 12 MB")
                 im = open_image(data)
+                blocking_error, _ = assess_image(im)
+                if blocking_error:
+                    raise ValueError(blocking_error)
             except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
                 error = str(exc)
             prepared.append((uploaded.name, data, im, error))
@@ -289,22 +300,31 @@ if page == "Analyze images":
                 else:
                     st.warning("Invalid image")
                 st.caption(f"{idx+1}. {uploaded.name[:34]}")
-    if st.button("✦ Analyze batch", type="primary", disabled=not bool(selected), use_container_width=True):
+    if st.button("✦ Analyze batch", type="primary", disabled=not (bool(selected) and bool(species)), use_container_width=True):
         records = []
+        seen_hashes = {}
         progress = st.progress(0, text="Processing images...")
         for index, (filename, data, im, error) in enumerate(prepared):
             row = {"image": filename, "animal": species, "prediction": "", "score": None, "status": "ok"}
+            digest = hashlib.sha256(data).hexdigest()
             if error:
                 row.update(status=f"error: {error}")
+            elif digest in seen_hashes:
+                row.update(status="duplicate", warnings=f"Duplicate of image {seen_hashes[digest]}: prediction skipped")
             else:
+                seen_hashes[digest] = index + 1
                 try:
+                    _, quality_warnings = assess_image(im)
                     scores = infer_one(im, animal, config, label_map[animal])
                     best_label, score = scores[0]
                     row.update(prediction=DISPLAY_LABELS.get(best_label, best_label), score=round(float(score), 4))
                     for label, value in scores:
                         row[f"prob_{label}"] = round(float(value), 4)
-                except Exception as exc:
-                    row["status"] = f"error: {exc}"
+                    notices = quality_warnings + prediction_warnings(best_label, float(score))
+                    if notices:
+                        row["warnings"] = " | ".join(notices)
+                except Exception:
+                    row["status"] = "error: Could not analyze this image; try another photo."
             records.append(row)
             progress.progress((index + 1) / len(prepared), text=f"Processed {index + 1}/{len(prepared)}")
         st.session_state.results = records
@@ -322,11 +342,14 @@ if page == "Analyze images":
         m1, m2, m3 = st.columns(3)
         m1.metric("Images processed", len(rows))
         m2.metric("Successful predictions", len(successful))
-        m3.metric("Errors", len(rows) - len(successful))
+        m3.metric("Errors / skipped", len(rows) - len(successful))
+        warnings_count = sum(bool(r.get("warnings")) for r in rows)
+        if warnings_count:
+            st.warning(f"{warnings_count} image(s) have quality, duplicate, or interpretation notices. Read the warnings column before relying on results.")
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, column_config={"score": st.column_config.NumberColumn("Model score", format="%.2f")})
         csv_bytes = pd.DataFrame(rows).to_csv(index=False).encode("utf-8-sig")
         st.download_button("⬇ Download results (CSV)", csv_bytes, file_name="pentai_batch_predictions.csv", mime="text/csv")
-        st.caption("The scores are uncalibrated model outputs, not verified disease probabilities. Files remain in memory for the active app session; only predictions are included in the CSV.")
+        st.caption("Scores are uncalibrated model outputs, not disease probabilities. Image-quality checks are heuristic and cannot prove the right species or detect unknown diseases. Photos remain in session memory; predictions and warnings appear in the CSV.")
         st.warning("Any animal showing illness, unusual skin lesions, fever, or rapid worsening should be assessed by a veterinarian. Do not use model results alone to decide treatment.")
         if successful:
             with st.expander("Inspect individual class scores"):
@@ -450,30 +473,68 @@ if page == "Guidance assistant":
     st.caption("Only your chat text and an aggregate of prediction labels are sent to Google Gemini when AI is enabled. Uploaded photos and filenames are not sent. Avoid entering private identifying details.")
 
 if page == "Model insights":
-    st.markdown('<div class="section-label">Model evaluation</div>', unsafe_allow_html=True)
-    st.caption("Figures below are from fixed held-out evaluation reports, not generated from your new uploads.")
-    for animal, icon in [("goat", "🐐"), ("cattle", "🐄")]:
-        st.subheader(f"{icon} {animal.capitalize()} model")
-        data = metrics[animal]
-        cols = st.columns(4)
-        for col, (label, value) in zip(cols, [("Accuracy", pct(data["accuracy"])), ("Balanced accuracy", pct(data["balanced_accuracy"])), ("Macro F1", pct(data["macro_f1"])), ("Test images", str(data["test_samples"]))]):
-            col.metric(label, value)
-        one, two = st.columns(2)
-        with one:
-            path = EVALUATION_DIR / animal / "confusion_matrix.png"
-            if path.exists():
-                st.image(str(path), caption="Confusion matrix", use_container_width=True)
-        with two:
-            path = EVALUATION_DIR / animal / "classification_report.csv"
-            if path.exists():
-                st.dataframe(pd.read_csv(path), hide_index=True, use_container_width=True)
-        st.divider()
+    st.markdown('<div class="section-label">Model performance</div>', unsafe_allow_html=True)
+    st.caption("Results are from held-out test images not used in training. They describe model evaluation, not predictions on new uploads or real-world diagnostic accuracy.")
+    insight_view = st.radio("View results", ["Overview", "Goat", "Cattle"], horizontal=True, key="insight_view")
 
+    if insight_view == "Overview":
+        st.subheader("Evaluation overview")
+        a, b = st.columns(2)
+        with a:
+            st.metric("Goat test accuracy", pct(metrics["goat"]["accuracy"]))
+            st.caption("151 test images · 148 correct")
+        with b:
+            st.metric("Cattle test accuracy", pct(metrics["cattle"]["accuracy"]))
+            st.caption("152 test images · 130 correct")
+        st.markdown("#### Key findings")
+        st.write("The goat model missed 3 of 60 goatpox images. The cattle model missed 18 of 48 lumpy skin disease images.")
+        st.warning("Cattle lumpy skin disease recall is 62.5%. A Healthy result must not be used to rule out illness.")
+        st.caption("Choose Goat or Cattle above for confusion matrices and detailed class-level scores.")
+    else:
+        animal = insight_view.lower()
+        data = metrics[animal]
+        st.subheader(("🐐 " if animal == "goat" else "🐄 ") + insight_view + " model")
+        a, b, c = st.columns(3)
+        a.metric("Accuracy", pct(data["accuracy"]))
+        b.metric("Balanced accuracy", pct(data["balanced_accuracy"]))
+        c.metric("Macro F1", pct(data["macro_f1"]))
+        st.caption(f'{data["test_samples"]} held-out test images')
+        st.markdown("#### Confusion matrix")
+        matrix_path = EVALUATION_DIR / animal / "confusion_matrix.png"
+        if matrix_path.exists():
+            st.image(str(matrix_path), caption="Rows: actual class; columns: predicted class", use_container_width=True)
+        else:
+            st.info("Confusion matrix not available in the evaluation folder.")
+        if animal == "goat":
+            st.info("Goatpox: 57 of 60 detected; 3 incorrectly predicted healthy.")
+        else:
+            st.warning("Lumpy skin disease: 30 of 48 detected (62.5% recall); 18 incorrectly predicted healthy.")
+        with st.expander("Detailed classification report"):
+            report_path = EVALUATION_DIR / animal / "classification_report.csv"
+            if report_path.exists():
+                report = pd.read_csv(report_path)
+                report = report.rename(columns={"Unnamed: 0": "Disease class"})
+                if "Disease class" not in report.columns and len(report.columns):
+                    report = report.rename(columns={report.columns[0]: "Disease class"})
+                names = ["goatpox", "healthy"] if animal == "goat" else ["healthy", "lumpy_skin"]
+                if "Disease class" in report.columns:
+                    report = report[report["Disease class"].astype(str).isin(names)].copy()
+                    report["Disease class"] = report["Disease class"].replace({"goatpox": "Goatpox", "healthy": "Healthy", "lumpy_skin": "Lumpy skin disease"})
+                for col in ("precision", "recall", "f1-score"):
+                    if col in report.columns:
+                        report[col] = pd.to_numeric(report[col], errors="coerce").map(lambda v: f"{v:.1%}" if pd.notna(v) else "—")
+                if "support" in report.columns:
+                    report["support"] = pd.to_numeric(report["support"], errors="coerce").astype("Int64")
+                report = report.rename(columns={"precision": "Precision", "recall": "Recall", "f1-score": "F1-score", "support": "Test images"})
+                st.dataframe(report, hide_index=True, use_container_width=True)
+            else:
+                st.info("Classification report not available in the evaluation folder.")
+        st.caption("These figures are evaluation statistics, not clinical validation or calibrated disease probabilities.")
 if page == "About PentAI":
     st.markdown('<div class="section-label">About PentAI</div>', unsafe_allow_html=True)
     st.write("PentAI is an image-based livestock screening application that analyzes goat and cattle photographs using separate MobileNetV2 models. It helps users review supported disease-class predictions and prepare for veterinary follow-up.")
     st.markdown("**Prediction flow:** Choose species → upload image(s) → RGB conversion and resize to 224×224 → saved species-specific model (internal preprocessing) → class scores → result and optional guidance.")
-    st.markdown("**Limitations:** Only two classes per species; no automatic animal verification; outputs are not calibrated disease probabilities; dataset test performance may not generalize to field conditions; unrelated or poor-quality images can be misclassified.")
+    st.markdown("**Limitations:** Only two classes per species; no automatic species verification, multiple-animal localization, or unknown-disease detection. Quality checks and low-confidence alerts are heuristics only; scores are uncalibrated and dataset performance may not generalize to field conditions.")
     st.markdown("**Veterinary advice:** Seek qualified veterinary assessment for clinical signs, testing and decisions. Do not medicate animals based solely on app predictions.")
     st.caption("Currently supports goats and cattle only; poultry and other conditions are not supported.")
 
